@@ -21,7 +21,6 @@ npm run seed         # Seed database with dummy data (requires SUPABASE_SERVICE_
 ### Database Structure
 - **Supabase PostgreSQL** with Row Level Security (RLS)
 - Core tables: `profiles`, `influencers`, `brands`, `campaigns`, `activities`
-- Extended tables: `negotiations`, `campaign_workflows`, `workflow_participants`, `email_templates`
 - Views: `influencer_performance`, `brand_collaboration_history`
 - TKP calculation is stored as a generated column in campaigns table
 
@@ -37,15 +36,13 @@ npm run seed         # Seed database with dummy data (requires SUPABASE_SERVICE_
 
 ### Component Architecture
 - **Sliding panels**: Used for quick data views without navigation (performance metrics, etc.)
-- **Workflow pipeline**: Drag-and-drop Kanban board with 7 stages for campaign management
 - **Data tables**: Built with `@tanstack/react-table` for sorting, filtering, pagination
 - **Form dialogs**: Modal-based forms for CRUD operations
 
 ### Key UI/UX Patterns
 1. **Performance Panel**: Slides from right, shows influencer metrics across campaigns/brands
-2. **Campaign Workflow**: Visual pipeline with stages (Selected → Outreach → Follow-up → Negotiation → Live)
-3. **Brand Detail View**: Comprehensive view showing all campaigns, influencers, and financial metrics
-4. **Bulk Actions**: Email composer for batch outreach, CSV import for data migration
+2. **Brand Detail View**: Comprehensive view showing all campaigns, influencers, and financial metrics
+3. **CSV Import**: For data migration and bulk data entry
 
 ## Critical Implementation Details
 
@@ -68,13 +65,10 @@ const schema = z.object({
 })
 ```
 
-### Drag & Drop Implementation
-- Uses `@hello-pangea/dnd` (maintained fork of react-beautiful-dnd)
-- Required for workflow pipeline stage management
 
 ### Date/Currency Formatting
 - Utility functions in `lib/utils/formatters.ts`:
-  - `formatCurrency()`: Formats numbers as EUR currency
+  - `formatCurrency()`: Formats numbers as USD currency
   - `formatDate()`: Formats dates consistently
   - `formatFollowerCount()`: Formats large numbers (1.2M, 500K)
 
@@ -95,15 +89,15 @@ Use the `SlidingPanel` component wrapper:
 </SlidingPanel>
 ```
 
-### Adding to Campaign Workflow
-1. Update workflow stages in `PIPELINE_STAGES` constant
-2. Modify participant movement logic in `handleDrop`
-3. Add stage-specific actions (email templates, reminders)
-
 ## Testing Approach
 - Manual testing in development
 - Use seed data for consistent test scenarios
 - Verify RLS policies in Supabase dashboard
+
+## Data Import Scripts
+- `scripts/import-bookings.js`: Import campaign data from CSV
+- `scripts/seed-data.js`: Generate test data
+- `scripts/verify-setup.js`: Check Supabase connection
 
 ## Deployment Checklist
 1. Ensure environment variables are set in production

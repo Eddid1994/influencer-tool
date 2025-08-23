@@ -11,8 +11,9 @@ import {
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Edit, Eye, Workflow } from 'lucide-react'
+import { Edit, Eye } from 'lucide-react'
 import { formatCurrency, formatDate } from '@/lib/utils/formatters'
+import { NegotiationStatusBadge, type NegotiationStatus } from '@/components/negotiations/negotiation-status-badge'
 
 interface Campaign {
   id: string
@@ -27,6 +28,10 @@ interface Campaign {
   tkp: number | null
   brands: { name: string } | null
   influencers: { name: string; instagram_handle: string | null } | null
+  campaign_negotiations?: {
+    status: NegotiationStatus
+    last_contact_date: string | null
+  }[]
 }
 
 interface CampaignsTableProps {
@@ -58,6 +63,7 @@ export default function CampaignsTable({ campaigns }: CampaignsTableProps) {
             <TableHead>Brand</TableHead>
             <TableHead>Influencer</TableHead>
             <TableHead>Status</TableHead>
+            <TableHead>Negotiation</TableHead>
             <TableHead>Duration</TableHead>
             <TableHead>Budget</TableHead>
             <TableHead>TKP</TableHead>
@@ -96,6 +102,13 @@ export default function CampaignsTable({ campaigns }: CampaignsTableProps) {
                   </Badge>
                 </TableCell>
                 <TableCell>
+                  <NegotiationStatusBadge 
+                    status={campaign.campaign_negotiations?.[0]?.status || null}
+                    size="sm"
+                    showIcon={false}
+                  />
+                </TableCell>
+                <TableCell>
                   {campaign.start_date && campaign.end_date ? (
                     <div className="text-sm">
                       <div>{formatDate(campaign.start_date)}</div>
@@ -127,11 +140,6 @@ export default function CampaignsTable({ campaigns }: CampaignsTableProps) {
                     <Link href={`/campaigns/${campaign.id}`}>
                       <Button variant="ghost" size="icon" title="View">
                         <Eye className="h-4 w-4" />
-                      </Button>
-                    </Link>
-                    <Link href={`/campaigns/${campaign.id}/workflow`}>
-                      <Button variant="ghost" size="icon" title="Workflow">
-                        <Workflow className="h-4 w-4" />
                       </Button>
                     </Link>
                     <Link href={`/campaigns/${campaign.id}/edit`}>

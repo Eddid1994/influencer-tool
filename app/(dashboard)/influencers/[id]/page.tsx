@@ -43,6 +43,7 @@ async function getInfluencer(id: string) {
     .order('created_at', { ascending: false })
     .limit(5)
 
+
   // Calculate quick stats
   const { data: campaignStats } = await supabase
     .from('campaigns')
@@ -52,6 +53,7 @@ async function getInfluencer(id: string) {
   const totalEarnings = campaignStats?.reduce((sum, c) => sum + (c.actual_cost || 0), 0) || 0
   const activeCampaigns = campaignStats?.filter(c => c.status === 'active').length || 0
   const completedCampaigns = campaignStats?.filter(c => c.status === 'completed').length || 0
+
 
   return { 
     influencer, 
@@ -86,6 +88,7 @@ export default async function InfluencerPage({ params }: PageProps) {
       default: return 'secondary'
     }
   }
+
 
   return (
     <div className="container mx-auto py-8">
@@ -132,7 +135,7 @@ export default async function InfluencerPage({ params }: PageProps) {
       </div>
 
       {/* Quick Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-8">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Earnings</CardTitle>
@@ -145,16 +148,17 @@ export default async function InfluencerPage({ params }: PageProps) {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Campaigns</CardTitle>
+            <CardTitle className="text-sm font-medium">Campaigns</CardTitle>
             <Calendar className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.totalCampaigns}</div>
             <p className="text-xs text-muted-foreground">
-              {stats.activeCampaigns} active, {stats.completedCampaigns} completed
+              {stats.activeCampaigns} active
             </p>
           </CardContent>
         </Card>
+
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -261,6 +265,7 @@ export default async function InfluencerPage({ params }: PageProps) {
           </CardContent>
         </Card>
       </div>
+
 
       {/* Recent Activities */}
       <Card className="mt-6">

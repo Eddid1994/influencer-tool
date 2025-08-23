@@ -9,6 +9,155 @@ export type Json =
 export interface Database {
   public: {
     Tables: {
+      campaign_negotiations: {
+        Row: {
+          id: string
+          campaign_id: string
+          status: 'pending_outreach' | 'outreach_sent' | 'awaiting_response' | 'negotiating' | 'agreed' | 'declined' | 'on_hold' | null
+          current_stage: string | null
+          priority: 'low' | 'medium' | 'high' | null
+          last_contact_date: string | null
+          final_agreed_amount_cents: number | null
+          created_at: string
+          updated_at: string
+          created_by: string | null
+          updated_by: string | null
+        }
+        Insert: {
+          id?: string
+          campaign_id: string
+          status?: 'pending_outreach' | 'outreach_sent' | 'awaiting_response' | 'negotiating' | 'agreed' | 'declined' | 'on_hold' | null
+          current_stage?: string | null
+          priority?: 'low' | 'medium' | 'high' | null
+          last_contact_date?: string | null
+          final_agreed_amount_cents?: number | null
+          created_at?: string
+          updated_at?: string
+          created_by?: string | null
+          updated_by?: string | null
+        }
+        Update: {
+          id?: string
+          campaign_id?: string
+          status?: 'pending_outreach' | 'outreach_sent' | 'awaiting_response' | 'negotiating' | 'agreed' | 'declined' | 'on_hold' | null
+          current_stage?: string | null
+          priority?: 'low' | 'medium' | 'high' | null
+          last_contact_date?: string | null
+          final_agreed_amount_cents?: number | null
+          created_at?: string
+          updated_at?: string
+          created_by?: string | null
+          updated_by?: string | null
+        }
+      }
+      negotiation_offers: {
+        Row: {
+          id: string
+          negotiation_id: string
+          offer_type: 'initial' | 'counter' | 'final'
+          offered_by: 'brand' | 'influencer'
+          amount_cents: number
+          currency: string | null
+          terms: Json | null
+          notes: string | null
+          created_at: string
+          created_by: string | null
+        }
+        Insert: {
+          id?: string
+          negotiation_id: string
+          offer_type: 'initial' | 'counter' | 'final'
+          offered_by: 'brand' | 'influencer'
+          amount_cents: number
+          currency?: string | null
+          terms?: Json | null
+          notes?: string | null
+          created_at?: string
+          created_by?: string | null
+        }
+        Update: {
+          id?: string
+          negotiation_id?: string
+          offer_type?: 'initial' | 'counter' | 'final'
+          offered_by?: 'brand' | 'influencer'
+          amount_cents?: number
+          currency?: string | null
+          terms?: Json | null
+          notes?: string | null
+          created_at?: string
+          created_by?: string | null
+        }
+      }
+      negotiation_communications: {
+        Row: {
+          id: string
+          negotiation_id: string
+          communication_type: 'email' | 'phone' | 'message'
+          direction: 'inbound' | 'outbound'
+          subject: string | null
+          content: string
+          created_at: string
+          created_by: string | null
+        }
+        Insert: {
+          id?: string
+          negotiation_id: string
+          communication_type: 'email' | 'phone' | 'message'
+          direction?: 'inbound' | 'outbound'
+          subject?: string | null
+          content: string
+          created_at?: string
+          created_by?: string | null
+        }
+        Update: {
+          id?: string
+          negotiation_id?: string
+          communication_type?: 'email' | 'phone' | 'message'
+          direction?: 'inbound' | 'outbound'
+          subject?: string | null
+          content?: string
+          created_at?: string
+          created_by?: string | null
+        }
+      }
+      negotiation_tasks: {
+        Row: {
+          id: string
+          negotiation_id: string
+          type: 'follow_up' | 'internal_review' | 'send_offer' | 'send_contract'
+          title: string
+          description: string | null
+          due_at: string
+          status: 'open' | 'completed'
+          assignee_id: string | null
+          created_at: string
+          created_by: string | null
+        }
+        Insert: {
+          id?: string
+          negotiation_id: string
+          type: 'follow_up' | 'internal_review' | 'send_offer' | 'send_contract'
+          title: string
+          description?: string | null
+          due_at: string
+          status?: 'open' | 'completed'
+          assignee_id?: string | null
+          created_at?: string
+          created_by?: string | null
+        }
+        Update: {
+          id?: string
+          negotiation_id?: string
+          type?: 'follow_up' | 'internal_review' | 'send_offer' | 'send_contract'
+          title?: string
+          description?: string | null
+          due_at?: string
+          status?: 'open' | 'completed'
+          assignee_id?: string | null
+          created_at?: string
+          created_by?: string | null
+        }
+      }
       profiles: {
         Row: {
           id: string

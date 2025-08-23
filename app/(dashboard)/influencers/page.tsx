@@ -2,30 +2,31 @@ import { createClient } from '@/lib/supabase/server'
 import { Button } from '@/components/ui/button'
 import { Plus } from 'lucide-react'
 import Link from 'next/link'
-import InfluencersTable from '@/components/influencers/influencers-table'
+import InfluencersTableWithSelection from '@/components/influencers/influencers-table-with-selection'
 import InfluencerFilters from '@/components/influencers/influencer-filters'
 import ImportExport from '@/components/influencers/import-export'
 
 export default async function InfluencersPage({
   searchParams,
 }: {
-  searchParams: { status?: string; search?: string; page?: string }
+  searchParams: Promise<{ status?: string; search?: string; page?: string }>
 }) {
   const supabase = await createClient()
+  const params = await searchParams
   
   // Build query with filters
   let query = supabase.from('influencers').select('*', { count: 'exact' })
   
-  if (searchParams.status && searchParams.status !== 'all') {
-    query = query.eq('status', searchParams.status)
+  if (params.status && params.status !== 'all') {
+    query = query.eq('status', params.status)
   }
   
-  if (searchParams.search) {
-    query = query.or(`name.ilike.%${searchParams.search}%,email.ilike.%${searchParams.search}%,instagram_handle.ilike.%${searchParams.search}%`)
+  if (params.search) {
+    query = query.or(`name.ilike.%${params.search}%,email.ilike.%${params.search}%,instagram_handle.ilike.%${params.search}%`)
   }
   
   // Pagination
-  const page = parseInt(searchParams.page || '1')
+  const page = parseInt(params.page || '1')
   const pageSize = 10
   const from = (page - 1) * pageSize
   const to = from + pageSize - 1
@@ -39,6 +40,7 @@ export default async function InfluencersPage({
     .from('influencers')
     .select('*')
     .order('created_at', { ascending: false })
+  
   
   return (
     <div className="space-y-6">
@@ -60,7 +62,7 @@ export default async function InfluencersPage({
 
       <InfluencerFilters />
       
-      <InfluencersTable 
+      <InfluencersTableWithSelection 
         influencers={influencers || []} 
         totalCount={count || 0}
         currentPage={page}

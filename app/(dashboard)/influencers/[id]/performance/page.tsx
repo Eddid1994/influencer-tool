@@ -31,15 +31,16 @@ async function getInfluencerPerformance(id: string) {
     .eq('influencer_id', id)
     .order('start_date', { ascending: false })
 
-  // Get negotiation history
+  // Get negotiation history from negotiation_entries
   const { data: negotiations } = await supabase
-    .from('negotiations')
+    .from('negotiation_entries')
     .select(`
       *,
-      brands:brand_id (id, name)
+      brand:brand_id (id, name, industry),
+      pool:pool_id (id, name)
     `)
     .eq('influencer_id', id)
-    .order('negotiation_date', { ascending: false })
+    .order('created_at', { ascending: false })
 
   // Calculate performance metrics
   const metrics = {
@@ -232,48 +233,72 @@ export default async function InfluencerPerformancePage({ params }: PageProps) {
                   <div className="flex justify-between items-start">
                     <div>
                       <div className="flex items-center gap-2">
-                        <h4 className="font-medium">{negotiation.brands?.name || 'Unknown Brand'}</h4>
+                        <h4 className="font-medium">{negotiation.brand?.name || 'No brand assigned'}</h4>
                         <Badge variant={getStatusColor(negotiation.status)}>
-                          {negotiation.status}
+                          {negotiation.status.replace('_', ' ')}
                         </Badge>
                       </div>
                       <p className="text-sm text-gray-500 mt-1">
-                        {formatDate(negotiation.negotiation_date)}
+                        Pool: {negotiation.pool?.name || 'Unknown'}
+                      </p>
+                      <p className="text-sm text-gray-500">
+                        {formatDate(negotiation.created_at)}
                       </p>
                     </div>
                     <div className="text-right">
-                      <p className="text-sm text-gray-500">Proposed</p>
-                      <p className="font-semibold">{formatCurrency(negotiation.proposed_budget)}</p>
+                      {negotiation.final_offer ? (
+                        <>
+                          <p className="text-sm text-gray-500">Final Agreement</p>
+                          <p className="font-semibold text-green-600">{formatCurrency(negotiation.final_offer)}</p>
+                        </>
+                      ) : negotiation.current_offer ? (
+                        <>
+                          <p className="text-sm text-gray-500">Current Offer</p>
+                          <p className="font-semibold">{formatCurrency(negotiation.current_offer)}</p>
+                        </>
+                      ) : negotiation.initial_offer ? (
+                        <>
+                          <p className="text-sm text-gray-500">Initial Offer</p>
+                          <p className="font-semibold">{formatCurrency(negotiation.initial_offer)}</p>
+                        </>
+                      ) : (
+                        <>
+                          <p className="text-sm text-gray-500">No offer yet</p>
+                        </>
+                      )}
                     </div>
                   </div>
                   
-                  <div className="mt-3 grid grid-cols-3 gap-4 text-sm">
-                    <div>
-                      <span className="text-gray-500">They offered:</span>
-                      <p className="font-medium">{formatCurrency(negotiation.proposed_budget)}</p>
+                  {(negotiation.initial_offer || negotiation.current_offer || negotiation.final_offer) && (
+                    <div className="mt-3 grid grid-cols-3 gap-4 text-sm">
+                      <div>
+                        <span className="text-gray-500">Initial:</span>
+                        <p className="font-medium">
+                          {negotiation.initial_offer ? formatCurrency(negotiation.initial_offer) : '-'}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-gray-500">Current:</span>
+                        <p className="font-medium">
+                          {negotiation.current_offer ? formatCurrency(negotiation.current_offer) : '-'}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-gray-500">Final:</span>
+                        <p className="font-medium">
+                          {negotiation.final_offer ? formatCurrency(negotiation.final_offer) : '-'}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <span className="text-gray-500">We asked:</span>
-                      <p className="font-medium">{formatCurrency(negotiation.influencer_rate)}</p>
-                    </div>
-                    <div>
-                      <span className="text-gray-500">Agreed:</span>
-                      <p className="font-medium">
-                        {negotiation.final_agreed_rate ? 
-                          formatCurrency(negotiation.final_agreed_rate) : 
-                          '-'
-                        }
-                      </p>
-                    </div>
-                  </div>
+                  )}
                   
                   {negotiation.notes && (
                     <p className="text-sm text-gray-600 mt-3">{negotiation.notes}</p>
                   )}
                   
-                  {negotiation.proposed_deliverables && (
+                  {negotiation.last_contact_at && (
                     <p className="text-sm text-gray-500 mt-2">
-                      Deliverables: {negotiation.proposed_deliverables}
+                      Last contact: {formatDate(negotiation.last_contact_at)}
                     </p>
                   )}
                 </div>
