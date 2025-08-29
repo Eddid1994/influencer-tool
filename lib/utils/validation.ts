@@ -13,18 +13,20 @@ export const negotiationOfferSchema = z.object({
   terms: z.object({
     deliverables: z.array(z.string()).optional(),
     payment_terms: z.string().optional(),
-  }).optional(),
-  notes: z.string().max(1000, 'Notes too long').optional(),
+  }).nullable().optional(),
+  notes: z.string().max(1000, 'Notes too long').nullable().optional(),
+  created_by: z.string().uuid('Invalid user ID').optional(),
 })
 
 export const negotiationCommunicationSchema = z.object({
   negotiation_id: z.string().uuid('Invalid negotiation ID'),
   communication_type: z.enum(['email', 'phone', 'message']),
   direction: z.enum(['inbound', 'outbound']),
-  subject: z.string().max(200, 'Subject too long').optional().nullable(),
+  subject: z.string().max(200, 'Subject too long').nullable().optional(),
   content: z.string()
     .min(1, 'Content is required')
     .max(5000, 'Content too long'),
+  created_by: z.string().uuid('Invalid user ID').optional(),
 })
 
 export const negotiationTaskSchema = z.object({
@@ -33,9 +35,10 @@ export const negotiationTaskSchema = z.object({
   title: z.string()
     .min(1, 'Title is required')
     .max(200, 'Title too long'),
-  description: z.string().max(1000, 'Description too long').optional().nullable(),
+  description: z.string().max(1000, 'Description too long').nullable().optional(),
   due_at: z.string().datetime('Invalid date format'),
   assignee_id: z.string().uuid('Invalid assignee ID'),
+  created_by: z.string().uuid('Invalid user ID').optional(),
 })
 
 export const negotiationStatusSchema = z.enum([

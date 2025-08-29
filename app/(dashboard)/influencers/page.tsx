@@ -1,10 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { Button } from '@/components/ui/button'
-import { Plus } from 'lucide-react'
-import Link from 'next/link'
-import InfluencersTableWithSelection from '@/components/influencers/influencers-table-with-selection'
-import InfluencerFilters from '@/components/influencers/influencer-filters'
-import ImportExport from '@/components/influencers/import-export'
+import ClientInfluencersPage from './client-page'
 
 export default async function InfluencersPage({
   searchParams,
@@ -35,39 +30,18 @@ export default async function InfluencersPage({
   
   const { data: influencers, count } = await query
   
-  // Get all influencers for export (without pagination)
-  const { data: allInfluencers } = await supabase
-    .from('influencers')
-    .select('*')
-    .order('created_at', { ascending: false })
-  
+  // Get ALL engagement stats (not filtered by page) for date filtering
+  const { data: engagementStats } = await supabase
+    .from('engagements')
+    .select('influencer_id, agreed_total_cents, total_revenue_cents, opened_at')
   
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Influencers</h1>
-          <p className="text-gray-500">Manage your influencer relationships</p>
-        </div>
-        <div className="flex gap-2">
-          <ImportExport currentData={allInfluencers || []} />
-          <Link href="/influencers/new">
-            <Button>
-              <Plus className="h-4 w-4 mr-2" />
-              Add Influencer
-            </Button>
-          </Link>
-        </div>
-      </div>
-
-      <InfluencerFilters />
-      
-      <InfluencersTableWithSelection 
-        influencers={influencers || []} 
-        totalCount={count || 0}
-        currentPage={page}
-        pageSize={pageSize}
-      />
-    </div>
+    <ClientInfluencersPage
+      influencers={influencers || []}
+      engagementStats={engagementStats || []}
+      totalCount={count || 0}
+      currentPage={page}
+      pageSize={pageSize}
+    />
   )
 }

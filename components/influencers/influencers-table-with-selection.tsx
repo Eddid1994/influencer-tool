@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
   Table,
@@ -29,18 +28,25 @@ import {
   Eye, 
   TrendingUp, 
   MessageSquare,
-  Mail,
   Users,
-  ChevronDown
+  Handshake
 } from 'lucide-react'
-import { formatFollowerCount } from '@/lib/utils/formatters'
+import { formatFollowerCount, formatCurrency } from '@/lib/utils/formatters'
 import { Database } from '@/types/database'
 import { SlidingPanel } from '@/components/ui/sliding-panel'
 import { PerformancePanel } from '@/components/influencers/performance-panel'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 
-type Influencer = Database['public']['Tables']['influencers']['Row']
+type Influencer = Database['public']['Tables']['influencers']['Row'] & {
+  negotiationCount?: {
+    active: number
+    total: number
+  }
+  totalSpent?: number
+  totalRevenue?: number
+  roas?: number
+}
 
 interface InfluencersTableProps {
   influencers: Influencer[]
@@ -59,9 +65,8 @@ export default function InfluencersTableWithSelection({
   const [selectedInfluencer, setSelectedInfluencer] = useState<Influencer | null>(null)
   const [isPanelOpen, setIsPanelOpen] = useState(false)
   const [selectedInfluencers, setSelectedInfluencers] = useState<Set<string>>(new Set())
-  const [isProcessing, setIsProcessing] = useState(false)
+  const [isProcessing] = useState(false)
   const totalPages = Math.ceil(totalCount / pageSize)
-  const supabase = createClient()
 
   const getStatusColor = (status: string | null) => {
     switch (status) {
@@ -165,6 +170,9 @@ export default function InfluencersTableWithSelection({
               <TableHead>Name</TableHead>
               <TableHead>Platforms</TableHead>
               <TableHead>Total Followers</TableHead>
+              <TableHead>Spent</TableHead>
+              <TableHead>Revenue</TableHead>
+              <TableHead>ROAS</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Niche</TableHead>
               <TableHead className="w-[70px]"></TableHead>
@@ -173,7 +181,7 @@ export default function InfluencersTableWithSelection({
           <TableBody>
             {influencers.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center py-8">
+                <TableCell colSpan={10} className="text-center py-8">
                   No influencers found
                 </TableCell>
               </TableRow>
@@ -233,6 +241,35 @@ export default function InfluencersTableWithSelection({
                     {formatFollowerCount(getTotalFollowers(influencer))}
                   </TableCell>
                   <TableCell>
+                    <div className={influencer.totalSpent && influencer.totalSpent > 0 ? 'font-medium' : 'text-gray-400'}>
+                      {influencer.totalSpent && influencer.totalSpent > 0 
+                        ? formatCurrency(influencer.totalSpent / 100)
+                        : '-'
+                      }
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className={influencer.totalRevenue && influencer.totalRevenue > 0 ? 'font-medium text-green-600' : 'text-gray-400'}>
+                      {influencer.totalRevenue && influencer.totalRevenue > 0
+                        ? formatCurrency(influencer.totalRevenue / 100)
+                        : '-'
+                      }
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className={
+                      !influencer.roas || influencer.roas === 0 ? 'text-gray-400' :
+                      influencer.roas >= 2 ? 'font-bold text-green-600' :
+                      influencer.roas >= 1 ? 'font-medium text-blue-600' :
+                      'font-medium text-red-600'
+                    }>
+                      {influencer.roas && influencer.roas > 0
+                        ? `${influencer.roas.toFixed(2)}x`
+                        : '-'
+                      }
+                    </div>
+                  </TableCell>
+                  <TableCell>
                     <Badge variant={getStatusColor(influencer.status)}>
                       {influencer.status || 'new'}
                     </Badge>
@@ -285,7 +322,8 @@ export default function InfluencersTableWithSelection({
                         <DropdownMenuItem
                           onClick={() => {
                             handleSelectOne(influencer.id, true)
-                            handleStartNegotiation()
+                            // TODO: Implement negotiation start
+                            toast.info('Negotiation feature coming soon')
                           }}
                         >
                           <MessageSquare className="mr-2 h-4 w-4" />

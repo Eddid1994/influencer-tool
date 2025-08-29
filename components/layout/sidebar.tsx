@@ -7,7 +7,8 @@ import {
   LayoutDashboard,
   Users,
   Building2,
-  Megaphone,
+  Handshake,
+  Mail,
   Settings,
   LogOut,
   Menu,
@@ -24,7 +25,8 @@ const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Influencers', href: '/influencers', icon: Users },
   { name: 'Brands', href: '/brands', icon: Building2 },
-  { name: 'Campaigns', href: '/campaigns', icon: Megaphone },
+  { name: 'Engagements', href: '/engagements', icon: Handshake },
+  { name: 'Templates', href: '/templates', icon: Mail },
 ]
 
 export default function Sidebar() {

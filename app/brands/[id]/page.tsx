@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
+import FinancialKPICards from '@/components/kpi/financial-kpi-cards'
 import { 
   ArrowLeft, 
   Edit, 
@@ -52,6 +53,20 @@ interface BrandDetails {
   updated_at: string
 }
 
+interface EngagementData {
+  id: string
+  period_label: string
+  status: string
+  agreed_total_cents: number | null
+  total_revenue_cents: number | null
+  total_views: number | null
+  influencer: {
+    id: string
+    name: string
+    instagram_handle: string | null
+  } | null
+}
+
 interface CampaignData {
   id: string
   campaign_name: string
@@ -63,7 +78,7 @@ interface CampaignData {
   target_views: number | null
   actual_views: number | null
   tkp: number | null
-  influencers: {
+  influencer: {
     id: string
     name: string
     instagram_handle: string | null
@@ -87,16 +102,18 @@ export default function BrandDetailPage() {
   const brandId = params.id as string
   const [brand, setBrand] = useState<BrandDetails | null>(null)
   const [campaigns, setCampaigns] = useState<CampaignData[]>([])
+  const [engagements, setEngagements] = useState<EngagementData[]>([])
   const [influencerCollabs, setInfluencerCollabs] = useState<InfluencerCollaboration[]>([])
   const [stats, setStats] = useState({
     totalCampaigns: 0,
     activeCampaigns: 0,
     totalBudget: 0,
     totalSpent: 0,
+    totalRevenue: 0,
     totalViews: 0,
     avgTKP: 0,
     totalInfluencers: 0,
-    roi: 0
+    roas: 0
   })
   const [loading, setLoading] = useState(true)
   const supabase = createClient()
@@ -117,43 +134,40 @@ export default function BrandDetailPage() {
       if (brandError) throw brandError
       setBrand(brandData)
 
-      // Fetch campaigns for this brand
-      const { data: campaignData, error: campaignError } = await supabase
-        .from('campaigns')
+      // Fetch engagements for this brand
+      const { data: engagementData, error: engagementError } = await supabase
+        .from('engagements')
         .select(`
           id,
-          campaign_name,
+          period_label,
           status,
-          start_date,
-          end_date,
-          budget,
-          actual_cost,
-          target_views,
-          actual_views,
-          tkp,
-          influencers (
-            id,
-            name,
-            instagram_handle
-          )
+          agreed_total_cents,
+          total_revenue_cents,
+          total_views,
+          influencer:influencers (id, name, instagram_handle)
         `)
         .eq('brand_id', brandId)
-        .order('created_at', { ascending: false })
+        .order('opened_at', { ascending: false })
 
-      if (campaignError) throw campaignError
-      setCampaigns(campaignData || [])
+      if (engagementError) console.error('Engagement error:', engagementError)
+      setEngagements((engagementData as unknown as EngagementData[]) || [])
+
+      // Set campaigns to empty array (table no longer exists)
+      const campaignData: any[] = []
+      setCampaigns([])
 
       // Calculate influencer collaborations
       const influencerMap = new Map<string, InfluencerCollaboration>()
       
-      campaignData?.forEach(campaign => {
-        if (campaign.influencers) {
-          const key = campaign.influencers.id
+      campaignData?.forEach((campaign: any) => {
+        const influencerData = Array.isArray(campaign.influencer) ? campaign.influencer[0] : campaign.influencer
+        if (influencerData) {
+          const key = influencerData.id
           if (!influencerMap.has(key)) {
             influencerMap.set(key, {
-              influencer_id: campaign.influencers.id,
-              influencer_name: campaign.influencers.name,
-              instagram_handle: campaign.influencers.instagram_handle,
+              influencer_id: influencerData.id,
+              influencer_name: influencerData.name,
+              instagram_handle: influencerData.instagram_handle,
               campaigns_count: 0,
               total_spent: 0,
               total_views: 0,
@@ -183,28 +197,38 @@ export default function BrandDetailPage() {
 
       setInfluencerCollabs(Array.from(influencerMap.values()))
 
-      // Calculate statistics
+      // Calculate statistics from engagements
+      const totalEngagements = engagementData?.length || 0
+      const activeEngagements = engagementData?.filter(e => e.status === 'active').length || 0
+      const engagementSpent = engagementData?.reduce((sum, e) => sum + (e.agreed_total_cents || 0), 0) || 0
+      const engagementRevenue = engagementData?.reduce((sum, e) => sum + (e.total_revenue_cents || 0), 0) || 0
+      const engagementViews = engagementData?.reduce((sum, e) => sum + (e.total_views || 0), 0) || 0
+
+      // Calculate statistics from campaigns (fallback)
       const totalCampaigns = campaignData?.length || 0
       const activeCampaigns = campaignData?.filter(c => c.status === 'active').length || 0
       const totalBudget = campaignData?.reduce((sum, c) => sum + (c.budget || 0), 0) || 0
-      const totalSpent = campaignData?.reduce((sum, c) => sum + (c.actual_cost || 0), 0) || 0
-      const totalViews = campaignData?.reduce((sum, c) => sum + (c.actual_views || 0), 0) || 0
-      const avgTKP = totalViews > 0 ? (totalSpent / totalViews) * 1000 : 0
-      const totalInfluencers = influencerMap.size
+      const campaignSpent = campaignData?.reduce((sum, c) => sum + (c.actual_cost || 0), 0) || 0
+      const campaignViews = campaignData?.reduce((sum, c) => sum + (c.actual_views || 0), 0) || 0
       
-      // Calculate ROI (simplified - you might want to add revenue tracking)
-      const estimatedRevenue = totalViews * 0.02 * 50 // Example: 2% conversion rate, $50 avg order value
-      const roi = totalSpent > 0 ? ((estimatedRevenue - totalSpent) / totalSpent) * 100 : 0
+      // Combine stats (prioritize engagements)
+      const totalSpent = engagementSpent || campaignSpent * 100 // Convert campaigns to cents
+      const totalRevenue = engagementRevenue
+      const totalViews = engagementViews || campaignViews
+      const avgTKP = totalViews > 0 ? (totalSpent / 100 / totalViews) * 1000 : 0
+      const totalInfluencers = influencerMap.size
+      const roas = totalSpent > 0 ? totalRevenue / totalSpent : 0
 
       setStats({
-        totalCampaigns,
-        activeCampaigns,
+        totalCampaigns: totalEngagements || totalCampaigns,
+        activeCampaigns: activeEngagements || activeCampaigns,
         totalBudget,
         totalSpent,
+        totalRevenue,
         totalViews,
         avgTKP,
         totalInfluencers,
-        roi
+        roas
       })
 
     } catch (error) {
@@ -279,7 +303,16 @@ export default function BrandDetailPage() {
         </Link>
       </div>
 
-      {/* Statistics Cards */}
+      {/* Financial KPIs */}
+      <FinancialKPICards
+        spent={stats.totalSpent}
+        revenue={stats.totalRevenue}
+        roas={stats.roas}
+        currency="EUR"
+        className="mb-6"
+      />
+
+      {/* Additional Statistics Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <Card>
           <CardHeader className="pb-2">
@@ -467,12 +500,12 @@ export default function BrandDetailPage() {
                             {campaign.campaign_name}
                           </TableCell>
                           <TableCell>
-                            {campaign.influencers ? (
+                            {campaign.influencer ? (
                               <div>
-                                <div>{campaign.influencers.name}</div>
-                                {campaign.influencers.instagram_handle && (
+                                <div>{campaign.influencer.name}</div>
+                                {campaign.influencer.instagram_handle && (
                                   <div className="text-xs text-gray-500">
-                                    {campaign.influencers.instagram_handle}
+                                    {campaign.influencer.instagram_handle}
                                   </div>
                                 )}
                               </div>

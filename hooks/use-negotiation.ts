@@ -3,237 +3,69 @@
 import { useState, useCallback, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
-
-interface Offer {
-  id: string
-  offer_type: 'initial' | 'counter' | 'final'
-  offered_by: 'brand' | 'influencer'
-  amount_cents: number
-  currency: string
-  notes?: string | null
-  created_at: string
-}
-
-interface Communication {
-  id: string
-  communication_type: 'email' | 'phone' | 'message'
-  direction: 'inbound' | 'outbound'
-  subject?: string | null
-  content: string
-  created_at: string
-}
-
-interface Task {
-  id: string
-  type: 'follow_up' | 'internal_review' | 'send_offer' | 'send_contract'
-  title: string
-  description?: string | null
-  due_at: string
-  status: 'open' | 'completed'
-}
-
-interface Negotiation {
-  id: string
-  campaign_id: string
-  status: 'pending_outreach' | 'outreach_sent' | 'awaiting_response' | 'negotiating' | 'agreed' | 'declined' | 'on_hold'
-  current_stage?: string | null
-  priority: 'low' | 'medium' | 'high'
-  last_contact_date?: string | null
-  final_agreed_amount_cents?: number | null
-  created_at: string
-  updated_at: string
-  offers?: Offer[]
-  communications?: Communication[]
-  tasks?: Task[]
-}
-
-interface UseNegotiationReturn {
-  negotiation: Negotiation | null
-  isLoading: boolean
-  isCreating: boolean
-  isRefreshing: boolean
-  error: Error | null
-  createNegotiation: () => Promise<void>
-  refreshNegotiation: () => Promise<void>
-  updateStatus: (status: Negotiation['status']) => Promise<void>
-}
+import { 
+  NegotiationStatus,
+  NegotiationPriority,
+  NegotiationData,
+  EngagementWithNegotiation,
+  UseNegotiationReturn
+} from '@/types/negotiation'
 
 export function useNegotiation(
-  campaignId: string, 
-  initialNegotiation?: Negotiation | null
+  engagementId: string, 
+  initialEngagement?: EngagementWithNegotiation | null
 ): UseNegotiationReturn {
-  const [negotiation, setNegotiation] = useState<Negotiation | null>(initialNegotiation || null)
-  const [isLoading, setIsLoading] = useState(!initialNegotiation)
-  const [isCreating, setIsCreating] = useState(false)
-  const [isRefreshing, setIsRefreshing] = useState(false)
+  const [engagement, setEngagement] = useState<EngagementWithNegotiation | null>(initialEngagement || null)
+  const [isLoading, setIsLoading] = useState(!initialEngagement)
+  const [isUpdating, setIsUpdating] = useState(false)
   const [error, setError] = useState<Error | null>(null)
   
   const supabase = createClient()
 
-  // Fetch negotiation data
-  const fetchNegotiation = useCallback(async (negotiationId: string) => {
+  // Fetch engagement with negotiation data
+  const fetchEngagement = useCallback(async () => {
     try {
-      // Fetch all data in parallel
-      const [negotiationResult, offersResult, communicationsResult, tasksResult] = await Promise.all([
-        supabase
-          .from('campaign_negotiations')
-          .select('*')
-          .eq('id', negotiationId)
-          .single(),
-        supabase
-          .from('negotiation_offers')
-          .select('*')
-          .eq('negotiation_id', negotiationId)
-          .order('created_at', { ascending: false }),
-        supabase
-          .from('negotiation_communications')
-          .select('*')
-          .eq('negotiation_id', negotiationId)
-          .order('created_at', { ascending: false }),
-        supabase
-          .from('negotiation_tasks')
-          .select('*')
-          .eq('negotiation_id', negotiationId)
-          .eq('status', 'open')
-          .order('due_at', { ascending: true })
-      ])
-
-      if (negotiationResult.error) {
-        throw negotiationResult.error
-      }
-
-      if (negotiationResult.data) {
-        setNegotiation({
-          ...negotiationResult.data,
-          offers: offersResult.data || [],
-          communications: communicationsResult.data || [],
-          tasks: tasksResult.data || []
-        } as Negotiation)
-      }
-    } catch (err) {
-      console.error('Error fetching negotiation:', err)
-      setError(err as Error)
-      throw err
-    }
-  }, [supabase])
-
-  // Check for existing negotiation on mount
-  useEffect(() => {
-    if (!initialNegotiation && campaignId) {
-      setIsLoading(true)
-      supabase
-        .from('campaign_negotiations')
-        .select('id')
-        .eq('campaign_id', campaignId)
-        .single()
-        .then(({ data }) => {
-          if (data?.id) {
-            return fetchNegotiation(data.id)
-          }
-        })
-        .catch((err) => {
-          // No existing negotiation is not an error
-          console.log('No existing negotiation')
-        })
-        .finally(() => {
-          setIsLoading(false)
-        })
-    }
-  }, [campaignId, initialNegotiation, fetchNegotiation, supabase])
-
-  // Create negotiation
-  const createNegotiation = useCallback(async () => {
-    setIsCreating(true)
-    setError(null)
-    
-    try {
-      // Check authentication
-      const { data: { user }, error: authError } = await supabase.auth.getUser()
-      if (authError || !user) {
-        throw new Error('Authentication required')
-      }
-
-      // Check for existing negotiation
-      const { data: existing } = await supabase
-        .from('campaign_negotiations')
-        .select('id')
-        .eq('campaign_id', campaignId)
-        .single()
-
-      if (existing) {
-        // Fetch the existing negotiation instead
-        await fetchNegotiation(existing.id)
-        toast.info('Negotiation already exists for this campaign')
-        return
-      }
-
-      // Create new negotiation
       const { data, error } = await supabase
-        .from('campaign_negotiations')
-        .insert({
-          campaign_id: campaignId,
-          status: 'pending_outreach',
-          current_stage: 'initial_contact',
-          priority: 'medium',
-          created_by: user.id,
-          updated_by: user.id
-        })
-        .select()
+        .from('engagements')
+        .select(`
+          *,
+          brand:brands(name, website),
+          influencer:influencers(name, email, instagram_handle),
+          brand_contact:brand_contacts(name, email, role)
+        `)
+        .eq('id', engagementId)
         .single()
 
       if (error) {
         throw error
       }
 
-      if (data) {
-        setNegotiation({
-          ...data,
-          offers: [],
-          communications: [],
-          tasks: []
-        } as Negotiation)
-        toast.success('Negotiation tracking started')
-      }
-    } catch (err: any) {
-      console.error('Error creating negotiation:', err)
-      setError(err)
-      
-      // User-friendly error messages
-      if (err.message === 'Authentication required') {
-        toast.error('Please log in to start negotiation tracking')
-      } else if (err.code === '23505') {
-        toast.error('A negotiation already exists for this campaign')
-      } else if (err.code === '42501') {
-        toast.error('You do not have permission to create negotiations')
-      } else {
-        toast.error(`Failed to start negotiation: ${err.message || 'Unknown error'}`)
-      }
-    } finally {
-      setIsCreating(false)
-    }
-  }, [campaignId, supabase, fetchNegotiation])
-
-  // Refresh negotiation data
-  const refreshNegotiation = useCallback(async () => {
-    if (!negotiation?.id) return
-    
-    setIsRefreshing(true)
-    setError(null)
-    
-    try {
-      await fetchNegotiation(negotiation.id)
+      setEngagement(data as EngagementWithNegotiation)
+      return data
     } catch (err) {
-      toast.error('Failed to refresh negotiation data')
-    } finally {
-      setIsRefreshing(false)
+      console.error('Error fetching engagement:', err)
+      setError(err as Error)
+      throw err
     }
-  }, [negotiation?.id, fetchNegotiation])
+  }, [supabase, engagementId])
 
-  // Update negotiation status
-  const updateStatus = useCallback(async (newStatus: Negotiation['status']) => {
-    if (!negotiation?.id) return
-    
-    setIsRefreshing(true)
+  // Load engagement data on mount
+  useEffect(() => {
+    if (!initialEngagement) {
+      setIsLoading(true)
+      fetchEngagement()
+        .catch(() => {
+          // Error already logged
+        })
+        .finally(() => {
+          setIsLoading(false)
+        })
+    }
+  }, [engagementId, initialEngagement, fetchEngagement])
+
+  // Add communication to negotiation data
+  const addCommunication = useCallback(async (communication: any) => {
+    setIsUpdating(true)
     setError(null)
     
     try {
@@ -243,41 +75,191 @@ export function useNegotiation(
       }
 
       const { error } = await supabase
-        .from('campaign_negotiations')
-        .update({ 
-          status: newStatus,
-          updated_by: user.id,
-          updated_at: new Date().toISOString()
+        .rpc('add_negotiation_communication', {
+          engagement_id_param: engagementId,
+          communication_type_param: communication.type,
+          direction_param: communication.direction,
+          subject_param: communication.subject || null,
+          content_param: communication.content,
+          user_id_param: user.id
         })
-        .eq('id', negotiation.id)
 
       if (error) {
         throw error
       }
 
-      // Update local state optimistically
-      setNegotiation(prev => prev ? { ...prev, status: newStatus } : null)
+      toast.success('Communication logged')
+      await refresh()
+    } catch (err: any) {
+      console.error('Error adding communication:', err)
+      setError(err)
+      toast.error(`Failed to log communication: ${err.message || 'Unknown error'}`)
+    } finally {
+      setIsUpdating(false)
+    }
+  }, [supabase, engagementId])
+
+  // Add offer to negotiation data
+  const addOffer = useCallback(async (offer: any) => {
+    setIsUpdating(true)
+    setError(null)
+    
+    try {
+      const { data: { user }, error: authError } = await supabase.auth.getUser()
+      if (authError || !user) {
+        throw new Error('Authentication required')
+      }
+
+      const { error } = await supabase
+        .rpc('add_negotiation_offer', {
+          engagement_id_param: engagementId,
+          offer_type_param: offer.offer_type,
+          offered_by_param: offer.offered_by,
+          amount_cents_param: offer.amount_cents,
+          currency_param: offer.currency,
+          notes_param: offer.notes || null,
+          user_id_param: user.id
+        })
+
+      if (error) {
+        throw error
+      }
+
+      toast.success('Offer recorded')
+      await refresh()
+    } catch (err: any) {
+      console.error('Error adding offer:', err)
+      setError(err)
+      toast.error(`Failed to record offer: ${err.message || 'Unknown error'}`)
+    } finally {
+      setIsUpdating(false)
+    }
+  }, [supabase, engagementId])
+
+  // Update negotiation status
+  const updateStatus = useCallback(async (newStatus: NegotiationStatus, notes?: string) => {
+    setIsUpdating(true)
+    setError(null)
+    
+    try {
+      const { data: { user }, error: authError } = await supabase.auth.getUser()
+      if (authError || !user) {
+        throw new Error('Authentication required')
+      }
+
+      const { error } = await supabase
+        .rpc('update_negotiation_status', {
+          engagement_id_param: engagementId,
+          new_status: newStatus,
+          notes_param: notes || null,
+          user_id_param: user.id
+        })
+
+      if (error) {
+        throw error
+      }
+
       toast.success(`Status updated to ${newStatus.replace('_', ' ')}`)
-      
-      // Refresh to get latest data
-      await fetchNegotiation(negotiation.id)
+      await refresh()
     } catch (err: any) {
       console.error('Error updating status:', err)
       setError(err)
       toast.error(`Failed to update status: ${err.message || 'Unknown error'}`)
     } finally {
-      setIsRefreshing(false)
+      setIsUpdating(false)
     }
-  }, [negotiation?.id, supabase, fetchNegotiation])
+  }, [supabase, engagementId])
+
+  // Set follow-up date
+  const setFollowUp = useCallback(async (date: string, notes?: string) => {
+    setIsUpdating(true)
+    setError(null)
+    
+    try {
+      const { data: { user }, error: authError } = await supabase.auth.getUser()
+      if (authError || !user) {
+        throw new Error('Authentication required')
+      }
+
+      const { error } = await supabase
+        .from('engagements')
+        .update({
+          next_follow_up_date: date,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', engagementId)
+
+      if (error) {
+        throw error
+      }
+
+      // Add timeline entry if notes provided
+      if (notes) {
+        const currentData = engagement?.negotiation_data as NegotiationData || {
+          offers: [],
+          communications: [],
+          timeline: [],
+          current_stage: 'initial_contact',
+          notes: '',
+          templates_used: [],
+          follow_up_count: 0
+        }
+
+        const timelineEntry = {
+          id: crypto.randomUUID(),
+          type: 'task' as const,
+          title: 'Follow-up scheduled',
+          description: `Follow-up set for ${new Date(date).toLocaleDateString()}`,
+          notes,
+          created_at: new Date().toISOString(),
+          created_by: user.id
+        }
+
+        const updatedData = {
+          ...currentData,
+          timeline: [...(currentData.timeline || []), timelineEntry]
+        }
+
+        await supabase
+          .from('engagements')
+          .update({ negotiation_data: updatedData })
+          .eq('id', engagementId)
+      }
+
+      toast.success('Follow-up scheduled')
+      await refresh()
+    } catch (err: any) {
+      console.error('Error setting follow-up:', err)
+      setError(err)
+      toast.error(`Failed to set follow-up: ${err.message || 'Unknown error'}`)
+    } finally {
+      setIsUpdating(false)
+    }
+  }, [supabase, engagementId, engagement])
+
+  // Refresh engagement data
+  const refresh = useCallback(async () => {
+    setIsUpdating(true)
+    setError(null)
+    
+    try {
+      await fetchEngagement()
+    } catch (err) {
+      toast.error('Failed to refresh negotiation data')
+    } finally {
+      setIsUpdating(false)
+    }
+  }, [fetchEngagement])
 
   return {
-    negotiation,
+    engagement,
     isLoading,
-    isCreating,
-    isRefreshing,
+    isUpdating,
     error,
-    createNegotiation,
-    refreshNegotiation,
-    updateStatus
+    addCommunication,
+    addOffer,
+    updateStatus,
+    setFollowUp,
+    refresh
   }
 }

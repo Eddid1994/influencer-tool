@@ -1,36 +1,56 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { DollarSign, Eye, Target, TrendingUp, Calendar, BarChart } from 'lucide-react'
+import { DollarSign, Eye, Target, TrendingUp, Calendar } from 'lucide-react'
 import { formatCurrency, formatDate } from '@/lib/utils/formatters'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
+import { Database } from '@/types/database'
+import { DateRangePicker } from '@/components/ui/date-range-picker'
+import { DateRange } from 'react-day-picker'
+import { isWithinInterval, parseISO, format } from 'date-fns'
+
+type Campaign = Database['public']['Tables']['campaigns']['Row'] & {
+  brands?: { id: string; name: string; industry: string | null }
+}
+type CampaignsByBrand = Record<string, {
+  brand?: { id: string; name: string; industry: string | null }
+  campaigns: Campaign[]
+  totalSpent: number
+  totalViews: number
+}>
+
+interface PerformanceData {
+  campaigns: Campaign[]
+  negotiations: any[]
+  metrics: {
+    totalCampaigns: number
+    completedCampaigns: number
+    activeCampaigns: number
+    totalEarnings: number
+    totalViews: number
+    avgCampaignValue: number
+    avgTKP: number
+    brandsWorkedWith: number
+    successRate: number
+  }
+}
 
 interface PerformancePanelProps {
   influencerId: string
   influencerName: string
 }
 
-export function PerformancePanel({ influencerId, influencerName }: PerformancePanelProps) {
+export function PerformancePanel({ influencerId }: PerformancePanelProps) {
   const [loading, setLoading] = useState(true)
-  const [data, setData] = useState<any>({
-    campaigns: [],
-    negotiations: [],
-    metrics: {
-      totalCampaigns: 0,
-      completedCampaigns: 0,
-      activeCampaigns: 0,
-      totalEarnings: 0,
-      totalViews: 0,
-      avgCampaignValue: 0,
-      avgTKP: 0,
-      brandsWorkedWith: 0,
-      successRate: 0
-    }
-  })
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined)
+  const [rawData, setRawData] = useState<{
+    campaigns: Campaign[]
+    negotiations: any[]
+  }>({ campaigns: [], negotiations: [] })
 
   useEffect(() => {
     async function fetchData() {
@@ -55,25 +75,8 @@ export function PerformancePanel({ influencerId, influencerName }: PerformancePa
         `)
         .eq('influencer_id', influencerId)
         .order('negotiation_date', { ascending: false })
-        .limit(5)
 
-      // Calculate metrics
-      const metrics = {
-        totalCampaigns: campaigns?.length || 0,
-        completedCampaigns: campaigns?.filter(c => c.status === 'completed').length || 0,
-        activeCampaigns: campaigns?.filter(c => c.status === 'active').length || 0,
-        totalEarnings: campaigns?.reduce((sum, c) => sum + (c.actual_cost || 0), 0) || 0,
-        totalViews: campaigns?.reduce((sum, c) => sum + (c.actual_views || 0), 0) || 0,
-        avgCampaignValue: campaigns?.length ? 
-          (campaigns.reduce((sum, c) => sum + (c.actual_cost || 0), 0) / campaigns.length) : 0,
-        avgTKP: campaigns?.length ? 
-          (campaigns.reduce((sum, c) => sum + (c.tkp || 0), 0) / campaigns.filter(c => c.tkp).length) : 0,
-        brandsWorkedWith: new Set(campaigns?.map(c => c.brand_id)).size,
-        successRate: campaigns?.length ? 
-          (campaigns.filter(c => c.actual_views && c.target_views && c.actual_views >= c.target_views).length / campaigns.length * 100) : 0
-      }
-
-      setData({ campaigns, negotiations, metrics })
+      setRawData({ campaigns: campaigns || [], negotiations: negotiations || [] })
       setLoading(false)
     }
 
@@ -82,7 +85,62 @@ export function PerformancePanel({ influencerId, influencerName }: PerformancePa
     }
   }, [influencerId])
 
-  const getStatusColor = (status: string) => {
+  // Filter data based on date range
+  const filteredData = useMemo(() => {
+    if (!dateRange?.from || !dateRange?.to) {
+      return rawData
+    }
+
+    const interval = { start: dateRange.from, end: dateRange.to }
+
+    const filteredCampaigns = rawData.campaigns.filter(c => {
+      if (!c.start_date) return false
+      try {
+        return isWithinInterval(parseISO(c.start_date), interval)
+      } catch {
+        return false
+      }
+    })
+
+    const filteredNegotiations = rawData.negotiations.filter(n => {
+      if (!n.negotiation_date) return false
+      try {
+        return isWithinInterval(parseISO(n.negotiation_date), interval)
+      } catch {
+        return false
+      }
+    })
+
+    return {
+      campaigns: filteredCampaigns,
+      negotiations: filteredNegotiations
+    }
+  }, [dateRange, rawData])
+
+  // Calculate metrics based on filtered data
+  const data = useMemo(() => {
+    const campaigns = filteredData.campaigns
+    const negotiations = filteredData.negotiations.slice(0, 5) // Limit to 5 for display
+
+    const metrics = {
+      totalCampaigns: campaigns.length,
+      completedCampaigns: campaigns.filter(c => c.status === 'completed').length,
+      activeCampaigns: campaigns.filter(c => c.status === 'active').length,
+      totalEarnings: campaigns.reduce((sum, c) => sum + (c.actual_cost || 0), 0),
+      totalViews: campaigns.reduce((sum, c) => sum + (c.actual_views || 0), 0),
+      avgCampaignValue: campaigns.length ? 
+        (campaigns.reduce((sum, c) => sum + (c.actual_cost || 0), 0) / campaigns.length) : 0,
+      avgTKP: campaigns.length ? 
+        (campaigns.reduce((sum, c) => sum + (c.tkp || 0), 0) / campaigns.filter(c => c.tkp).length) : 0,
+      brandsWorkedWith: new Set(campaigns.map(c => c.brand_id)).size,
+      successRate: campaigns.length ? 
+        (campaigns.filter(c => c.actual_views && c.target_views && c.actual_views >= c.target_views).length / campaigns.length * 100) : 0
+    }
+
+    return { campaigns, negotiations, metrics }
+  }, [filteredData])
+
+  const getStatusColor = (status: string | null) => {
     switch (status) {
       case 'completed': return 'outline'
       case 'active': return 'default'
@@ -96,7 +154,7 @@ export function PerformancePanel({ influencerId, influencerName }: PerformancePa
   }
 
   // Group campaigns by brand
-  const campaignsByBrand = data.campaigns?.reduce((acc: any, campaign: any) => {
+  const campaignsByBrand = data.campaigns?.reduce((acc: CampaignsByBrand, campaign: Campaign) => {
     const brandName = campaign.brands?.name || 'Unknown'
     if (!acc[brandName]) {
       acc[brandName] = {
@@ -126,6 +184,22 @@ export function PerformancePanel({ influencerId, influencerName }: PerformancePa
 
   return (
     <div className="p-6">
+      {/* Date Range Picker */}
+      <div className="flex justify-between items-center mb-6">
+        <div className="flex items-center gap-2">
+          <Calendar className="h-4 w-4 text-muted-foreground" />
+          <span className="text-sm text-muted-foreground">
+            {dateRange?.from && dateRange?.to
+              ? `${format(dateRange.from, 'MMM d, yyyy')} - ${format(dateRange.to, 'MMM d, yyyy')}`
+              : 'All time'}
+          </span>
+        </div>
+        <DateRangePicker
+          date={dateRange}
+          onDateChange={setDateRange}
+        />
+      </div>
+
       {/* Key Metrics */}
       <div className="grid grid-cols-2 gap-4 mb-6">
         <Card>
@@ -192,7 +266,7 @@ export function PerformancePanel({ influencerId, influencerName }: PerformancePa
         {/* Campaigns Tab */}
         <TabsContent value="campaigns" className="space-y-4">
           <div className="space-y-2">
-            {data.campaigns?.slice(0, 10).map((campaign: any) => (
+            {data.campaigns?.slice(0, 10).map((campaign) => (
               <div key={campaign.id} className="border rounded-lg p-3">
                 <div className="flex justify-between items-start">
                   <div>
@@ -229,7 +303,7 @@ export function PerformancePanel({ influencerId, influencerName }: PerformancePa
         {/* Brands Tab */}
         <TabsContent value="brands" className="space-y-4">
           <div className="space-y-3">
-            {Object.entries(campaignsByBrand || {}).map(([brandName, data]: [string, any]) => (
+            {Object.entries(campaignsByBrand || {}).map(([brandName, data]) => (
               <div key={brandName} className="border rounded-lg p-3">
                 <div className="flex justify-between items-start mb-2">
                   <div>
@@ -245,7 +319,7 @@ export function PerformancePanel({ influencerId, influencerName }: PerformancePa
                 </div>
                 
                 <div className="space-y-1 mt-2">
-                  {data.campaigns.slice(0, 3).map((campaign: any) => (
+                  {data.campaigns.slice(0, 3).map((campaign) => (
                     <div key={campaign.id} className="text-xs text-gray-600">
                       • {campaign.campaign_name}
                       {campaign.actual_cost && ` - ${formatCurrency(campaign.actual_cost)}`}
@@ -261,7 +335,7 @@ export function PerformancePanel({ influencerId, influencerName }: PerformancePa
         <TabsContent value="negotiations" className="space-y-4">
           {data.negotiations && data.negotiations.length > 0 ? (
             <div className="space-y-3">
-              {data.negotiations.map((negotiation: any) => (
+              {data.negotiations.map((negotiation) => (
                 <div key={negotiation.id} className="border rounded-lg p-3">
                   <div className="flex justify-between items-start">
                     <div>

@@ -6,9 +6,15 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { createClient } from '@/lib/supabase/server'
 import { formatCurrency, formatDate } from '@/lib/utils/formatters'
+import { Database } from '@/types/database'
+
+type Engagement = Database['public']['Tables']['engagements']['Row'] & {
+  brands?: { id: string; name: string }
+}
+type Activity = Database['public']['Tables']['activities']['Row']
 
 interface PageProps {
-  params: { id: string }
+  params: Promise<{ id: string }>
 }
 
 async function getInfluencer(id: string) {
@@ -24,9 +30,9 @@ async function getInfluencer(id: string) {
     return null
   }
 
-  // Get recent campaigns
-  const { data: recentCampaigns } = await supabase
-    .from('campaigns')
+  // Get recent engagements
+  const { data: recentEngagements } = await supabase
+    .from('engagements')
     .select(`
       *,
       brands:brand_id (name)
@@ -45,37 +51,38 @@ async function getInfluencer(id: string) {
 
 
   // Calculate quick stats
-  const { data: campaignStats } = await supabase
-    .from('campaigns')
-    .select('actual_cost, status')
+  const { data: engagementStats } = await supabase
+    .from('engagements')
+    .select('agreed_total_cents, status')
     .eq('influencer_id', id)
 
-  const totalEarnings = campaignStats?.reduce((sum, c) => sum + (c.actual_cost || 0), 0) || 0
-  const activeCampaigns = campaignStats?.filter(c => c.status === 'active').length || 0
-  const completedCampaigns = campaignStats?.filter(c => c.status === 'completed').length || 0
+  const totalEarnings = engagementStats?.reduce((sum, e) => sum + ((e.agreed_total_cents || 0) / 100), 0) || 0
+  const activeEngagements = engagementStats?.filter(e => e.status === 'active').length || 0
+  const completedEngagements = engagementStats?.filter(e => e.status === 'completed').length || 0
 
 
   return { 
     influencer, 
-    recentCampaigns, 
+    recentEngagements, 
     recentActivities,
     stats: {
       totalEarnings,
-      activeCampaigns,
-      completedCampaigns,
-      totalCampaigns: campaignStats?.length || 0
+      activeEngagements,
+      completedEngagements,
+      totalEngagements: engagementStats?.length || 0
     }
   }
 }
 
 export default async function InfluencerPage({ params }: PageProps) {
-  const data = await getInfluencer(params.id)
+  const { id } = await params
+  const data = await getInfluencer(id)
 
   if (!data) {
     notFound()
   }
 
-  const { influencer, recentCampaigns, recentActivities, stats } = data
+  const { influencer, recentEngagements, recentActivities, stats } = data
 
   const getStatusColor = (status: string | null) => {
     switch (status) {
@@ -100,19 +107,19 @@ export default async function InfluencerPage({ params }: PageProps) {
           </Button>
         </Link>
         <div className="flex gap-2">
-          <Link href={`/influencers/${params.id}/performance`}>
+          <Link href={`/influencers/${id}/performance`}>
             <Button variant="outline">
               <TrendingUp className="h-4 w-4 mr-2" />
               View Performance
             </Button>
           </Link>
-          <Link href={`/influencers/${params.id}/negotiate`}>
+          <Link href={`/influencers/${id}/negotiate`}>
             <Button variant="outline">
               <MessageSquare className="h-4 w-4 mr-2" />
               New Negotiation
             </Button>
           </Link>
-          <Link href={`/influencers/${params.id}/edit`}>
+          <Link href={`/influencers/${id}/edit`}>
             <Button>
               <Edit className="h-4 w-4 mr-2" />
               Edit
@@ -148,13 +155,13 @@ export default async function InfluencerPage({ params }: PageProps) {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Campaigns</CardTitle>
+            <CardTitle className="text-sm font-medium">Engagements</CardTitle>
             <Calendar className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.totalCampaigns}</div>
+            <div className="text-2xl font-bold">{stats.totalEngagements}</div>
             <p className="text-xs text-muted-foreground">
-              {stats.activeCampaigns} active
+              {stats.activeEngagements} active
             </p>
           </CardContent>
         </Card>
@@ -231,23 +238,23 @@ export default async function InfluencerPage({ params }: PageProps) {
             <CardDescription>Latest campaign collaborations</CardDescription>
           </CardHeader>
           <CardContent>
-            {recentCampaigns && recentCampaigns.length > 0 ? (
+            {recentEngagements && recentEngagements.length > 0 ? (
               <div className="space-y-2">
-                {recentCampaigns.map((campaign: any) => (
-                  <div key={campaign.id} className="flex justify-between items-center">
+                {recentEngagements.map((engagement: Engagement) => (
+                  <div key={engagement.id} className="flex justify-between items-center">
                     <div>
                       <Link 
-                        href={`/campaigns/${campaign.id}`}
+                        href={`/engagements/${engagement.id}`}
                         className="font-medium hover:underline"
                       >
-                        {campaign.campaign_name}
+                        {engagement.campaign_name || 'Untitled'}
                       </Link>
                       <p className="text-sm text-gray-500">
-                        {campaign.brands?.name}
+                        {engagement.brands?.name}
                       </p>
                     </div>
-                    <Badge variant={getStatusColor(campaign.status)}>
-                      {campaign.status}
+                    <Badge variant={getStatusColor(engagement.status)}>
+                      {engagement.status}
                     </Badge>
                   </div>
                 ))}
@@ -255,8 +262,8 @@ export default async function InfluencerPage({ params }: PageProps) {
             ) : (
               <p className="text-gray-500">No campaigns yet</p>
             )}
-            {stats.totalCampaigns > 5 && (
-              <Link href={`/influencers/${params.id}/performance`}>
+            {stats.totalEngagements > 5 && (
+              <Link href={`/influencers/${id}/performance`}>
                 <Button variant="link" className="mt-4 p-0">
                   View all campaigns →
                 </Button>
@@ -276,7 +283,7 @@ export default async function InfluencerPage({ params }: PageProps) {
         <CardContent>
           {recentActivities && recentActivities.length > 0 ? (
             <div className="space-y-3">
-              {recentActivities.map((activity: any) => (
+              {recentActivities.map((activity: Activity) => (
                 <div key={activity.id} className="flex justify-between items-start">
                   <div>
                     <p className="font-medium">{activity.activity_type}</p>

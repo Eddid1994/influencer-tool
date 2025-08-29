@@ -6,9 +6,12 @@ import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Download, Upload } from 'lucide-react'
 import Papa from 'papaparse'
+import { Database } from '@/types/database'
+
+type Influencer = Database['public']['Tables']['influencers']['Row']
 
 interface ImportExportProps {
-  currentData?: any[]
+  currentData?: Influencer[]
 }
 
 export default function ImportExport({ currentData }: ImportExportProps) {
@@ -66,7 +69,7 @@ export default function ImportExport({ currentData }: ImportExportProps) {
           notes: row.notes || null
         }))
 
-        const validData = data.filter((item: any) => item.name)
+        const validData = data.filter((item) => item.name)
 
         if (validData.length > 0) {
           const { error } = await supabase

@@ -1,5 +1,7 @@
 # Complete Supabase Setup Guide for Visca CRM
 
+> **⚠️ IMPORTANT UPDATE (January 2025):** The database schema has been significantly optimized with new tables for better performance and workflow management. Please use the new migration approach below.
+
 ## Step 1: Create Supabase Account & Project
 
 1. **Go to [supabase.com](https://supabase.com)** and click "Start your project"
@@ -20,19 +22,62 @@ Once your project is ready:
 2. **Copy these values:**
    - `Project URL` (looks like: https://xxxxx.supabase.co)
    - `anon public` key (safe for browser)
-   - Save the `service_role` key somewhere secure (for admin operations)
+   - Save the `service_role` key somewhere secure (for admin operations - needed for data seeding)
 
-## Step 3: Set Up Database Schema
+## Step 3: Set Up Database Schema (Updated January 2025)
 
-### Option A: Using SQL Editor (Recommended for MVP)
+### Option A: Automated Migration Script (Recommended)
+
+1. **Set up environment variables:**
+```bash
+# Create .env.local file with your Supabase credentials
+NEXT_PUBLIC_SUPABASE_URL=https://xxxxx.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJ...
+SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJ... # Required for migrations
+```
+
+2. **Run the optimization migration:**
+```bash
+# Check current schema without changes
+node scripts/apply-database-optimization.js --check
+
+# Apply the optimized schema
+node scripts/apply-database-optimization.js
+```
+
+### Option B: Manual SQL Migration
 
 1. **Go to SQL Editor** in the left sidebar
 2. Click **"New query"**
-3. **Copy and paste** the entire contents of `/supabase/schema.sql`
-4. Click **"Run"** (or press Cmd/Ctrl + Enter)
-5. You should see "Success. No rows returned"
+3. **Run migrations in order:**
+   - First run `/migrations/001_optimize_database_mvp.sql`
+   - This creates the new optimized schema with:
+     - `engagements` table (replaces simple campaigns)
+     - `deliverables` table (content tracking)
+     - `influencer_accounts` (multi-platform support)
+     - `deliverable_metrics` (performance tracking)
+     - And more...
 
-### Option B: Using Migrations (Better for Production)
+### New Database Structure (January 2025)
+
+The optimized schema includes:
+
+| Table | Purpose | Key Features |
+|-------|---------|--------------|
+| `profiles` | User accounts | RLS enabled, role-based access |
+| `influencers` | Influencer profiles | Core contact info |
+| `influencer_accounts` | Social accounts | Multiple platforms per influencer |
+| `influencer_account_stats` | Historical metrics | Track growth over time |
+| `brands` | Brand information | Client management |
+| `brand_contacts` | Contact persons | Multiple contacts per brand |
+| `engagements` | Collaborations | Core workflow table |
+| `deliverables` | Content tracking | Per-engagement deliverables |
+| `deliverable_metrics` | Performance data | Views, clicks, ROI |
+| `engagement_tasks` | Reminders | Follow-ups, deadlines |
+| `invoices` | Financial tracking | Payment management |
+| `coupon_codes` | Campaign codes | Attribution tracking |
+
+### Option C: Using Supabase CLI (Production)
 
 1. **Install Supabase CLI:**
 ```bash
@@ -41,20 +86,15 @@ brew install supabase/tap/supabase
 npm install -g supabase
 ```
 
-2. **Initialize Supabase locally:**
+2. **Initialize and link:**
 ```bash
 supabase init
-```
-
-3. **Link to your project:**
-```bash
 supabase link --project-ref your-project-ref
-# (find project-ref in Settings → General)
 ```
 
-4. **Run migrations:**
+3. **Apply migrations:**
 ```bash
-supabase db push
+supabase migration up
 ```
 
 ## Step 4: Configure Authentication
@@ -111,6 +151,8 @@ Visit http://localhost:3000 - you should see the login page
 
 ## Step 8: Add Sample Data (Optional)
 
+### For New Optimized Schema:
+
 Run this in the SQL Editor to add sample data:
 
 ```sql
@@ -120,11 +162,52 @@ INSERT INTO brands (name, website, industry, contact_email) VALUES
 ('Tech Gadgets', 'https://techgadgets.com', 'Technology', 'hello@techgadgets.com'),
 ('Beauty Brand', 'https://beautybrand.com', 'Beauty', 'info@beautybrand.com');
 
--- Insert sample influencers (make sure to replace user_id with your actual user ID)
+-- Insert sample influencers
 INSERT INTO influencers (name, email, instagram_handle, instagram_followers, status, niche) VALUES
 ('Sarah Johnson', 'sarah@email.com', '@sarahjohnson', 125000, 'active', ARRAY['fashion', 'lifestyle']),
 ('Mike Chen', 'mike@email.com', '@mikechen', 85000, 'active', ARRAY['tech', 'gaming']),
 ('Emma Wilson', 'emma@email.com', '@emmawilson', 200000, 'new', ARRAY['beauty', 'fashion']);
+
+-- Add influencer social accounts (new structure)
+INSERT INTO influencer_accounts (influencer_id, platform, handle, is_primary)
+SELECT 
+    i.id,
+    'instagram',
+    i.instagram_handle,
+    true
+FROM influencers i
+WHERE i.instagram_handle IS NOT NULL;
+
+-- Create sample engagement
+INSERT INTO engagements (brand_id, influencer_id, period_label, period_year, period_month, status, agreed_total_cents)
+SELECT 
+    b.id,
+    i.id,
+    '2025-01 Januar',
+    2025,
+    1,
+    'active',
+    150000 -- €1,500
+FROM brands b, influencers i
+WHERE b.name = 'Fashion Co' AND i.name = 'Sarah Johnson';
+
+-- Add deliverables to engagement
+INSERT INTO deliverables (engagement_id, platform, deliverable, planned_publish_at, promoted_product)
+SELECT 
+    e.id,
+    'instagram',
+    'story',
+    '2025-01-15',
+    'Spring Collection'
+FROM engagements e
+LIMIT 1;
+```
+
+### Or use the seed script:
+```bash
+npm run seed
+# or
+node scripts/seed-data.js
 ```
 
 ## Step 9: Verify Everything Works
@@ -160,21 +243,33 @@ INSERT INTO influencers (name, email, instagram_handle, instagram_followers, sta
 **1. "Invalid API key"**
 - Double-check you copied the entire key
 - Make sure you're using the `anon` key, not `service_role`
+- Service role key is only needed for migrations and seeding
 
 **2. "Permission denied for table"**
 - Check RLS policies are created
 - Ensure user is authenticated
 - Verify the user's role in profiles table
+- New tables need RLS policies (already included in migration)
 
-**3. "Email not sending"**
+**3. "Table does not exist" errors**
+- Run the database migration first: `node scripts/apply-database-optimization.js`
+- Check migration status: `node scripts/apply-database-optimization.js --check`
+- The app now uses new tables like `engagements` instead of just `campaigns`
+
+**4. "Email not sending"**
 - Check Authentication → Settings
 - Verify SMTP settings if using custom
 - Check spam folder
 
-**4. "Cannot connect to database"**
+**5. "Cannot connect to database"**
 - Verify project is running (not paused)
 - Check network/firewall settings
 - Ensure correct project URL
+
+**6. "View v_monthly_grid is empty"**
+- This is normal if you have no data
+- Add sample data using Step 8
+- The view requires data in `engagements` and `deliverables` tables
 
 ## Backup Your Database
 
@@ -209,20 +304,67 @@ INSERT INTO influencers (name, email, instagram_handle, instagram_followers, sta
 -- Check total users
 SELECT COUNT(*) FROM auth.users;
 
--- View all influencers
-SELECT * FROM influencers ORDER BY created_at DESC;
-
--- Check campaigns with calculations
+-- View all influencers with their accounts
 SELECT 
-  c.*,
-  b.name as brand_name,
-  i.name as influencer_name
-FROM campaigns c
-LEFT JOIN brands b ON c.brand_id = b.id
-LEFT JOIN influencers i ON c.influencer_id = i.id;
+    i.*,
+    array_agg(
+        json_build_object(
+            'platform', ia.platform,
+            'handle', ia.handle,
+            'is_primary', ia.is_primary
+        )
+    ) as accounts
+FROM influencers i
+LEFT JOIN influencer_accounts ia ON ia.influencer_id = i.id
+GROUP BY i.id
+ORDER BY i.created_at DESC;
 
--- Database size
-SELECT pg_database_size('postgres') / 1024 / 1024 as size_mb;
+-- Check engagements with full details (new structure)
+SELECT 
+    e.*,
+    b.name as brand_name,
+    i.name as influencer_name,
+    bc.name as contact_name,
+    COUNT(d.id) as deliverable_count,
+    SUM(CASE WHEN d.content_approved THEN 1 ELSE 0 END) as approved_count
+FROM engagements e
+LEFT JOIN brands b ON e.brand_id = b.id
+LEFT JOIN influencers i ON e.influencer_id = i.id
+LEFT JOIN brand_contacts bc ON e.brand_contact_id = bc.id
+LEFT JOIN deliverables d ON d.engagement_id = e.id
+GROUP BY e.id, b.name, i.name, bc.name
+ORDER BY e.opened_at DESC;
+
+-- Monthly performance overview (using new view)
+SELECT * FROM v_monthly_grid 
+WHERE monat LIKE '2025%'
+ORDER BY monat DESC, brand;
+
+-- Check deliverables with metrics
+SELECT 
+    d.*,
+    m.views,
+    m.clicks,
+    m.engagement_rate,
+    (m.revenue_cents::numeric / 100) as revenue
+FROM deliverables d
+LEFT JOIN deliverable_metrics_final m ON m.deliverable_id = d.id
+WHERE d.planned_publish_at >= CURRENT_DATE - INTERVAL '30 days';
+
+-- Database size and table sizes
+SELECT 
+    schemaname,
+    tablename,
+    pg_size_pretty(pg_total_relation_size(schemaname||'.'||tablename)) AS size
+FROM pg_tables
+WHERE schemaname = 'public'
+ORDER BY pg_total_relation_size(schemaname||'.'||tablename) DESC;
+
+-- Performance: Find slow queries (requires pg_stat_statements extension)
+-- SELECT query, calls, mean_exec_time, total_exec_time 
+-- FROM pg_stat_statements 
+-- ORDER BY mean_exec_time DESC 
+-- LIMIT 10;
 ```
 
 ## Support Resources

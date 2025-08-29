@@ -13,6 +13,9 @@ import { toast } from 'sonner'
 import { z } from 'zod'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
+import { Database } from '@/types/database'
+
+type Brand = Database['public']['Tables']['brands']['Row']
 
 const brandSchema = z.object({
   name: z.string().min(1, 'Brand name is required'),
@@ -83,17 +86,12 @@ export default function EditBrandPage() {
     setSaving(true)
 
     try {
-      const updateData: any = {
+      const updateData = {
         name: data.name,
         website: data.website || null,
         contact_email: data.contact_email || null,
         contact_phone: data.contact_phone || null,
-        address: data.address || null,
-        instagram_url: data.instagram_url || null,
-        twitter_url: data.twitter_url || null,
-        youtube_url: data.youtube_url || null,
-        notes: data.notes || null,
-        updated_at: new Date().toISOString()
+        notes: data.notes || null
       }
 
       const { error } = await supabase

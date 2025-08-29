@@ -4,104 +4,187 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Visca CRM is an influencer management system built with Next.js 15, Supabase, and TypeScript. It tracks influencer relationships, campaign performance, brand partnerships, and provides detailed analytics with focus on TKP (Tausend-Kontakt-Preis) metrics.
+Visca CRM is an influencer management system built with Next.js 15, Supabase, and TypeScript. It manages influencer collaborations, tracks deliverables, monitors performance metrics, and handles financial data with focus on TKP (Tausend-Kontakt-Preis) calculations.
 
 ## Development Commands
 
 ```bash
-npm run dev          # Start development server with Turbopack
-npm run build        # Build production bundle
-npm run lint         # Run ESLint
-npm run verify       # Verify Supabase setup
-npm run seed         # Seed database with dummy data (requires SUPABASE_SERVICE_ROLE_KEY)
+npm run dev                    # Start development server with Turbopack
+npm run build                  # Build production bundle
+npm run lint                   # Run ESLint (configured with Next.js core-web-vitals)
+npm run verify                 # Verify Supabase connection
+npm run seed                   # Seed database with test data
+npm run migrate:engagements    # Apply engagements migration
+npx tsc --noEmit              # Type check without building
 ```
 
 ## Architecture & Key Concepts
 
-### Database Structure
+### Database Structure (Updated January 2025)
 - **Supabase PostgreSQL** with Row Level Security (RLS)
-- Core tables: `profiles`, `influencers`, `brands`, `campaigns`, `activities`
-- Views: `influencer_performance`, `brand_collaboration_history`
-- TKP calculation is stored as a generated column in campaigns table
+- Core tables:
+  - `engagements`: Influencer collaborations (replaces simple campaigns)
+  - `deliverables`: Content tracking with approval workflow
+  - `influencer_accounts`: Multi-platform social media support
+  - `deliverable_metrics`: Performance tracking (views, clicks, ROI)
+  - `engagement_tasks`: Reminders and follow-ups
+  - `invoices`: Financial tracking
+  - `coupon_codes`: Campaign attribution
+- Views: `v_monthly_grid`, `influencer_performance`, `brand_collaboration_history`
 
 ### Authentication Flow
-- Supabase Auth handles user authentication
-- Protected routes use middleware in `app/(dashboard)` layout
-- Service role key required for bypassing RLS (seeding, admin operations)
+- Supabase Auth with email/password
+- Protected routes via `app/(dashboard)/layout.tsx` server component
+- User check with redirect: `if (!user) redirect('/login')`
+- Service role key required for admin operations (never expose client-side)
 
 ### State Management Pattern
-- React Query (`@tanstack/react-query`) for server state
-- Form state managed by React Hook Form + Zod validation
-- Optimistic updates with toast notifications via Sonner
+- **Server Components by default** for data fetching
+- **Client Components** (`'use client'`) for interactivity
+- React Query (`@tanstack/react-query`) for server state caching
+- React Hook Form + Zod for form validation
+- Sonner for toast notifications
 
 ### Component Architecture
-- **Sliding panels**: Used for quick data views without navigation (performance metrics, etc.)
-- **Data tables**: Built with `@tanstack/react-table` for sorting, filtering, pagination
-- **Form dialogs**: Modal-based forms for CRUD operations
+- **Sliding Panels**: `components/ui/sliding-panel.tsx` for detail views
+- **Data Tables**: `@tanstack/react-table` with sorting/filtering/pagination
+- **Error Boundaries**: Graceful error handling
+- **Loading Skeletons**: Better perceived performance
 
-### Key UI/UX Patterns
-1. **Performance Panel**: Slides from right, shows influencer metrics across campaigns/brands
-2. **Brand Detail View**: Comprehensive view showing all campaigns, influencers, and financial metrics
-3. **CSV Import**: For data migration and bulk data entry
+### Import Paths
+- Use `@/` alias for imports (configured in tsconfig.json)
+- Example: `import { createClient } from '@/lib/supabase/server'`
 
 ## Critical Implementation Details
 
-### Supabase Configuration
-- Project URL: `https://yaxwwlntgnnmykipshps.supabase.co`
-- Two keys needed:
-  - `NEXT_PUBLIC_SUPABASE_ANON_KEY`: For client-side operations (public)
-  - `SUPABASE_SERVICE_ROLE_KEY`: For bypassing RLS (keep secret, server-only)
+### Supabase Client Usage
+```typescript
+// Server Component (app directory)
+import { createClient } from '@/lib/supabase/server'
+const supabase = await createClient()
 
-### Tailwind CSS Version
-- **Important**: Use Tailwind CSS v3.4.1 (v4 has compatibility issues)
-- shadcn/ui components require v3.x
+// Client Component
+import { createClient } from '@/lib/supabase/client'
+const supabase = createClient()
+```
+
+### Environment Variables
+```bash
+NEXT_PUBLIC_SUPABASE_URL=https://yaxwwlntgnnmykipshps.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJ...  # Public, safe for client
+SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJ...      # Secret, server-only
+```
+
+### TypeScript Configuration
+- Strict mode enabled
+- Path alias: `@/*` maps to project root
+- Target: ES2017 for compatibility
+
+### Tailwind CSS
+- Version 3.4.1 (v4 has breaking changes with shadcn/ui)
+- Custom animations in `tailwind.config.ts`
+- shadcn/ui components in `components/ui/`
 
 ### Form Validation Pattern
 ```typescript
-// Always use Zod schemas with React Hook Form
 const schema = z.object({
-  field: z.string().min(1, 'Required'),
-  email: z.string().email('Invalid email')
+  name: z.string().min(1, 'Required'),
+  email: z.string().email('Invalid email'),
+  amount: z.number().positive('Must be positive')
+})
+
+const form = useForm<z.infer<typeof schema>>({
+  resolver: zodResolver(schema)
 })
 ```
 
-
 ### Date/Currency Formatting
-- Utility functions in `lib/utils/formatters.ts`:
-  - `formatCurrency()`: Formats numbers as USD currency
-  - `formatDate()`: Formats dates consistently
-  - `formatFollowerCount()`: Formats large numbers (1.2M, 500K)
+```typescript
+import { formatCurrency, formatDate, formatFollowerCount } from '@/lib/utils/formatters'
+// formatCurrency(1500) => "$1,500.00"
+// formatDate('2025-01-15') => "Jan 15, 2025"
+// formatFollowerCount(125000) => "125K"
+```
 
 ## Common Patterns to Follow
 
-### Adding New CRUD Features
-1. Create database table/columns in Supabase
-2. Generate TypeScript types with Supabase CLI
-3. Create table component with actions (view/edit/delete)
-4. Implement form dialog with React Hook Form + Zod
-5. Add detail page showing related data
+### Server vs Client Components
+- **Server by default**: Data fetching, SEO, initial render
+- **Client when needed**: Forms, modals, real-time updates, browser APIs
 
-### Creating Sliding Panels
-Use the `SlidingPanel` component wrapper:
+### Error Handling in Server Components
+```typescript
+const { data, error } = await supabase.from('table').select()
+if (error) {
+  console.error('Error:', error.message)
+  // Show user-friendly error UI
+}
+```
+
+### Creating CRUD Features
+1. Design database schema in Supabase
+2. Update `types/database.ts` with TypeScript types
+3. Create server component for data fetching
+4. Build client component for interactions
+5. Implement form with validation
+6. Add optimistic updates for better UX
+
+### Sliding Panel Usage
 ```tsx
-<SlidingPanel isOpen={isOpen} onClose={onClose} title="Title">
-  <Content />
+const [isOpen, setIsOpen] = useState(false)
+
+<SlidingPanel 
+  isOpen={isOpen} 
+  onClose={() => setIsOpen(false)} 
+  title="Details"
+  width="lg"
+>
+  <PanelContent />
 </SlidingPanel>
 ```
 
-## Testing Approach
-- Manual testing in development
-- Use seed data for consistent test scenarios
-- Verify RLS policies in Supabase dashboard
+## Testing & Debugging
 
-## Data Import Scripts
-- `scripts/import-bookings.js`: Import campaign data from CSV
-- `scripts/seed-data.js`: Generate test data
-- `scripts/verify-setup.js`: Check Supabase connection
+### Common Issues
+- **"Table does not exist"**: Run migrations with `npm run migrate:engagements`
+- **RLS errors**: Check user authentication and policies in Supabase dashboard
+- **Type errors**: Run `npx tsc --noEmit` to check types
+- **ESLint warnings**: Run `npm run lint` to check code quality
 
-## Deployment Checklist
-1. Ensure environment variables are set in production
-2. Run database migrations in Supabase
-3. Verify RLS policies are enabled
-4. Test authentication flow
-5. Check that service role key is NOT exposed client-side
+### Debugging Supabase Queries
+```typescript
+// Log full error details
+console.error('Query failed:', {
+  message: error.message,
+  code: error.code,
+  details: error.details,
+  hint: error.hint
+})
+```
+
+## Project Structure
+```
+app/
+├── (auth)/              # Public auth pages
+├── (dashboard)/         # Protected pages
+│   ├── engagements/    # Collaboration management
+│   ├── influencers/    # Influencer profiles
+│   └── brands/         # Brand management
+components/
+├── ui/                 # shadcn/ui components
+├── engagements/        # Engagement-specific components
+├── influencers/        # Influencer components
+└── kpi/                # Analytics components
+lib/
+├── supabase/          # Database clients
+└── utils/             # Helpers and formatters
+hooks/                 # Custom React hooks
+types/                 # TypeScript definitions
+```
+
+## Deployment Notes
+- Verify all environment variables in production
+- Enable RLS policies in Supabase
+- Run database migrations before deploying
+- Test authentication flow end-to-end
+- Monitor Supabase usage (free tier limits)

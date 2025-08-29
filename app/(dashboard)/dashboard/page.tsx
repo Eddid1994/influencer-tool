@@ -20,12 +20,12 @@ export default async function DashboardPage() {
   // Fetch dashboard metrics
   const [
     { count: totalInfluencers },
-    { count: activeCampaigns },
+    { count: activeEngagements },
     { count: totalBrands },
     { data: recentActivities }
   ] = await Promise.all([
     supabase.from('influencers').select('*', { count: 'exact', head: true }),
-    supabase.from('campaigns').select('*', { count: 'exact', head: true }).eq('status', 'active'),
+    supabase.from('engagements').select('*', { count: 'exact', head: true }).eq('status', 'active'),
     supabase.from('brands').select('*', { count: 'exact', head: true }),
     supabase.from('activities').select('*').order('created_at', { ascending: false }).limit(5)
   ])
@@ -39,8 +39,8 @@ export default async function DashboardPage() {
       trend: 'up'
     },
     {
-      title: 'Active Campaigns',
-      value: activeCampaigns || 0,
+      title: 'Active Engagements',
+      value: activeEngagements || 0,
       icon: Megaphone,
       change: '+23.1%',
       trend: 'up'
